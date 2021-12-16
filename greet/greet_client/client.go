@@ -26,7 +26,8 @@ func main() {
 
 	// doUnary(c)
 	// doServerStreaming(c)
-	doClientStreaming(c)
+	// doClientStreaming(c)
+	doBiDiStreaming(c)
 }
 
 func doUnary(c greetpb.GreetServiceClient) {
@@ -114,4 +115,61 @@ func doClientStreaming(c greetpb.GreetServiceClient) {
 	}
 
 	fmt.Printf("LongGreet Response: %v\n", res)
+}
+
+func doBiDiStreaming(c greetpb.GreetServiceClient) {
+	fmt.Println("Starting to do a BiDi Streaming RPC ...")
+
+	requests := []*greetpb.GreetEveryoneRequest{
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "Stephane",
+			},
+		},
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "Valdera",
+			},
+		},
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "Fauzan",
+			},
+		},
+	}
+
+	// We create a stream by invoking the server
+	stream, err := c.GreetEveryone(context.Background())
+	if err != nil {
+		log.Fatalf("Error wile creating streaming: %v", err)
+		return
+	}
+
+	waitc := make(chan struct{})
+	// We send a bunch of messages to the server
+	go func() {
+		for _, req := range requests {
+			fmt.Printf("Sending:  %v\n", req)
+			stream.Send(req)
+			time.Sleep(1000 * time.Millisecond)
+		}
+		stream.CloseSend()
+	}()
+	// We receive a bunch of messages from the server
+	go func() {
+		for {
+			res, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalf("Error while receiving: %v", err)
+				break
+			}
+			fmt.Printf("Received: %v\n", res.GetResult())
+		}
+		close(waitc)
+	}()
+	// block until everything is fine
+	<-waitc
 }
