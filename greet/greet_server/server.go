@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"grpc-go-course/greet/greetpb"
 	"io"
@@ -8,8 +9,6 @@ import (
 	"net"
 	"strconv"
 	"time"
-
-	"context"
 
 	"google.golang.org/grpc"
 )
