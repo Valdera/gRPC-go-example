@@ -9,10 +9,24 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 func main() {
-	cc, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	fmt.Println("Hello I'm a client")
+
+	certFile := "ssl/ca.crt"
+	creds, sslErr := credentials.NewClientTLSFromFile(certFile, "")
+	if sslErr != nil {
+		log.Fatalf("Error while loading CA trust certificate: %v", sslErr)
+		return
+	}
+
+	opts := grpc.WithTransportCredentials(creds)
+
+	cc, err := grpc.Dial("localhost:50051", opts)
 
 	fmt.Println("Starting Client Site")
 
@@ -24,10 +38,13 @@ func main() {
 
 	c := greetpb.NewGreetServiceClient(cc)
 
-	// doUnary(c)
+	doUnary(c)
 	// doServerStreaming(c)
 	// doClientStreaming(c)
-	doBiDiStreaming(c)
+	// doBiDiStreaming(c)
+	// doUnaryWithDeadline(c, 5*time.Second)
+	// doUnaryWithDeadline(c, 1*time.Second)
+
 }
 
 func doUnary(c greetpb.GreetServiceClient) {
@@ -172,4 +189,34 @@ func doBiDiStreaming(c greetpb.GreetServiceClient) {
 	}()
 	// block until everything is fine
 	<-waitc
+}
+
+func doUnaryWithDeadline(c greetpb.GreetServiceClient, timeout time.Duration) {
+	fmt.Println("Starting to do UnaryWithDeadline RPC...")
+	req := &greetpb.GreetRequest{
+		Greeting: &greetpb.Greeting{
+			FirstName: "Stephane",
+			LastName:  "Maarek",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	res, err := c.Greet(ctx, req)
+	if err != nil {
+
+		statusErr, ok := status.FromError(err)
+		if ok {
+			if statusErr.Code() == codes.DeadlineExceeded {
+				fmt.Println("Timeout was hit! Deadline was exceeded")
+			} else {
+				fmt.Printf("Error while calling GreetWithDeadline RPC: %v\n", statusErr)
+			}
+		} else {
+			log.Fatalf("error while calling Greet RPC: %v", err)
+		}
+	}
+
+	log.Printf("Response from Greet: %v", res.Result)
 }
